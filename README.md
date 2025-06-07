@@ -58,46 +58,23 @@ NIXPKGS_ALLOW_UNFREE=1 nix run .#remnote-beta --impure
 }
 ```
 
-## 手动更新 RemNote Beta
+## 手动更新 RemNote Beta (已自动化)
 
-当 RemNote 发布新的 Beta 版本时（例如 `1.20.0`），你可以按照以下更直接的步骤来更新软件包：
+本仓库配置了一个 GitHub Action，可以自动更新软件包的哈希值。
 
-1.  **获取新版本的哈希值**:
-    打开终端，使用 `nix-prefetch-url` 命令来直接下载新版本的 AppImage 并计算其哈希。请将命令中的版本号替换为实际的新版本号：
-    ```bash
-    nix-prefetch-url "https://download2.remnote.io/remnote-desktop2/RemNote-1.20.0-beta.AppImage"
-    ```
-    这个命令会输出一个 `sha256-...` 格式的哈希值。复制它。
+**你的更新流程极其简单：**
 
-2.  **一次性更新 `flake.nix`**:
-    打开 `flake.nix` 文件，然后：
-    *   将 `version` 变量更新为新的版本号。
-    *   将 `hash` 的值替换为你刚刚从上一步复制过来的新哈希。
+1.  在 GitHub 上，直接编辑 `flake.nix` 文件。
+2.  只修改 `let` 块中的 `version` 变量为你想要的新版本号。
+3.  直接提交你的更改。
 
-    修改后应如下所示：
-    ```nix
-    let
-      version = "1.20.0"; // <-- 新版本号
-    in
-    ...
-      src = final.fetchurl {
-        url = "https://download2.remnote.io/remnote-desktop2/RemNote-${version}-beta.AppImage";
-        hash = "sha256-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"; // <-- 粘贴新的哈希值
-      };
-    ...
-    ```
+**然后会发生什么？**
 
-3.  **验证和推送**:
-    *   运行构建命令来验证你的修改是否正确：
-        ```bash
-        NIXPKGS_ALLOW_UNFREE=1 nix build .#default --impure
-        ```
-    *   如果构建成功，提交你的更改并推送到 GitHub：
-        ```bash
-        git add flake.nix flake.lock
-        git commit -m "remnote-beta: update to version 1.20.0"
-        git push
-        ```
+*   你的提交会自动触发一个 GitHub Action 工作流。
+*   这个工作流会自动使用 `nix-prefetch-url` 获取新版本文件对应的正确哈希。
+*   机器人会自动用新的哈希值更新 `flake.nix` 文件，并创建一个新的提交推送到仓库。
+
+你只需要修改版本号，剩下的全部由机器人完成。
 
 ## 注意事项
 

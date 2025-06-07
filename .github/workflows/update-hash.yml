@@ -1,0 +1,83 @@
+name: "Auto-update Package Hash"
+
+# 这个工作流会在两种情况下被触发:
+# 1. 当有代码被推送到 main 分支，并且 flake.nix 文件被修改了。
+# 2. 当你手动在 Actions 页面点击 "Run workflow" 时。
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'flake.nix'
+  workflow_dispatch:
+
+jobs:
+  update-hash:
+    runs-on: ubuntu-latest
+    permissions:
+      # 需要写入权限来提交和推送代码
+      contents: write
+    steps:
+      # 第一步：检出你的代码
+      - name: "Checkout repository"
+        uses: actions/checkout@v4
+        with:
+          # 需要获取完整的 git 历史记录才能正确推送
+          fetch-depth: 0
+
+      # 第二步：安装 Nix
+      - name: "Install Nix"
+        uses: cachix/install-nix-action@v27
+
+      # 第三步：从 flake.nix 中提取版本号和当前的哈希值
+      - name: "Extract metadata from flake.nix"
+        id: metadata
+        run: |
+          # 使用 grep 和 cut 从文件中解析出版本号和哈希
+          VERSION=$(grep 'version = "' flake.nix | cut -d'"' -f2)
+          CURRENT_HASH=$(grep 'hash = "sha256-' flake.nix | cut -d'"' -f2)
+          
+          echo "Parsed version: $VERSION"
+          echo "Current hash: $CURRENT_HASH"
+          
+          # 将这些值设置为后续步骤可以使用的输出变量
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "current_hash=$CURRENT_HASH" >> $GITHUB_OUTPUT
+
+      # 第四步：使用新版本号计算出正确的哈希值
+      - name: "Prefetch new hash"
+        id: prefetch
+        run: |
+          VERSION=${{ steps.metadata.outputs.version }}
+          URL="https://download2.remnote.io/remnote-desktop2/RemNote-${VERSION}-beta.AppImage"
+          
+          echo "Prefetching URL: $URL"
+          
+          # 运行 nix-prefetch-url 并捕获输出
+          REAL_HASH=$(nix-prefetch-url "$URL")
+          
+          echo "Prefetched hash: $REAL_HASH"
+          echo "real_hash=$REAL_HASH" >> $GITHUB_OUTPUT
+
+      # 第五步：如果计算出的新哈希和文件里的旧哈希不一样，就更新文件
+      - name: "Update hash in flake.nix"
+        if: steps.metadata.outputs.current_hash != steps.prefetch.outputs.real_hash
+        run: |
+          CURRENT_HASH=${{ steps.metadata.outputs.current_hash }}
+          REAL_HASH=${{ steps.prefetch.outputs.real_hash }}
+          
+          echo "Hash differs. Updating flake.nix."
+          # 使用 sed 命令来查找并替换哈希值
+          sed -i "s|hash = \"$CURRENT_HASH\"|hash = \"$REAL_HASH\"|" flake.nix
+
+      # 第六步：提交并推送更改
+      - name: "Commit and push changes"
+        if: steps.metadata.outputs.current_hash != steps.prefetch.outputs.real_hash
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "chore(bot): auto-update hash for version ${{ steps.metadata.outputs.version }}"
+          commit_options: "--no-verify"
+          file_pattern: "flake.nix"
+          commit_user_name: "github-actions[bot]"
+          commit_user_email: "41898282+github-actions[bot]@users.noreply.github.com"
+          commit_author: "github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>" 
