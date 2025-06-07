@@ -16,7 +16,7 @@
 
 ```bash
 # 允许非自由软件
-NIXPKGS_ALLOW_UNFREE=1 nix run github:username/nix-remnote-beta --impure
+NIXPKGS_ALLOW_UNFREE=1 nix run github:bianyeyu/nix-remnote-beta --impure
 ```
 
 或者直接从本地仓库安装：
@@ -34,7 +34,7 @@ NIXPKGS_ALLOW_UNFREE=1 nix run .#remnote-beta --impure
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     # 添加 RemNote Beta flake
-    remnote-beta.url = "github:username/nix-remnote-beta";
+    remnote-beta.url = "github:bianyeyu/nix-remnote-beta";
   };
 
   outputs = { self, nixpkgs, remnote-beta, ... }: {
@@ -60,29 +60,44 @@ NIXPKGS_ALLOW_UNFREE=1 nix run .#remnote-beta --impure
 
 ## 手动更新 RemNote Beta
 
-当 RemNote 发布新的 Beta 版本时，可以按照以下步骤手动更新：
+当 RemNote 发布新的 Beta 版本时（例如 `1.20.0`），你可以按照以下更直接的步骤来更新软件包：
 
-1. 在 `flake.nix` 中更新版本号和下载链接：
-   ```nix
-   version = "1.19.XX"; # 替换为新版本号
-   url = "https://download2.remnote.io/remnote-desktop2/RemNote-1.19.XX-beta.AppImage"; # 更新链接
-   ```
+1.  **获取新版本的哈希值**:
+    打开终端，使用 `nix-prefetch-url` 命令来直接下载新版本的 AppImage 并计算其哈希。请将命令中的版本号替换为实际的新版本号：
+    ```bash
+    nix-prefetch-url "https://download2.remnote.io/remnote-desktop2/RemNote-1.20.0-beta.AppImage"
+    ```
+    这个命令会输出一个 `sha256-...` 格式的哈希值。复制它。
 
-2. 更新占位符哈希值：
-   ```nix
-   hash = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
-   ```
+2.  **一次性更新 `flake.nix`**:
+    打开 `flake.nix` 文件，然后：
+    *   将 `version` 变量更新为新的版本号。
+    *   将 `hash` 的值替换为你刚刚从上一步复制过来的新哈希。
 
-3. 尝试构建以获取正确的哈希值：
-   ```bash
-   NIXPKGS_ALLOW_UNFREE=1 nix build .#remnote-beta --impure
-   ```
+    修改后应如下所示：
+    ```nix
+    let
+      version = "1.20.0"; // <-- 新版本号
+    in
+    ...
+      src = final.fetchurl {
+        url = "https://download2.remnote.io/remnote-desktop2/RemNote-${version}-beta.AppImage";
+        hash = "sha256-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"; // <-- 粘贴新的哈希值
+      };
+    ...
+    ```
 
-4. 更新哈希值并再次构建：
-   ```bash
-   # 用错误信息中提供的正确哈希值更新 flake.nix
-   NIXPKGS_ALLOW_UNFREE=1 nix build .#remnote-beta --impure
-   ```
+3.  **验证和推送**:
+    *   运行构建命令来验证你的修改是否正确：
+        ```bash
+        NIXPKGS_ALLOW_UNFREE=1 nix build .#default --impure
+        ```
+    *   如果构建成功，提交你的更改并推送到 GitHub：
+        ```bash
+        git add flake.nix flake.lock
+        git commit -m "remnote-beta: update to version 1.20.0"
+        git push
+        ```
 
 ## 注意事项
 
